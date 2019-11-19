@@ -2,7 +2,6 @@ package de.tuberlin.aset.kshortestpath;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -109,9 +108,6 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 					// k-shortest path
 					Path rootPath = subPath(previousPathInformation.path, i);
 
-					// We store the disabled edges ids
-					Set<Object> disabledEdgesIds = new HashSet<>();
-
 					for (PathInformation pathInformation : A) {
 						if (pathInformation.path.size() - (includeEdges ? 2 : 1) > i
 								&& rootPath.equals(subPath(pathInformation.path, i))) {
@@ -130,7 +126,7 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 							if (edgesTraversal.asAdmin().clone().has(propertyKeyFactory.disableEdgeKey()).hasNext()) {
 								continue; // edge already disabled
 							}
-							disabledEdgesIds.addAll(disableEdges(edgesTraversal));
+							disableEdges(edgesTraversal);
 						}
 					}
 
@@ -148,7 +144,7 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 					}
 
 					// Add back the edges that were removed from the graph
-					enableEdges(traversal.E(disabledEdgesIds));
+					enableEdges();
 				}
 				// Sort the potential k-shortest paths by cost
 				// B is already sorted
@@ -184,12 +180,13 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 		return result;
 	}
 
-	private Set<Object> disableEdges(GraphTraversal<?, Edge> edgesTraversal) {
-		return edgesTraversal.property(propertyKeyFactory.disableEdgeKey(), Double.POSITIVE_INFINITY).id().toSet();
+	private void disableEdges(GraphTraversal<?, Edge> edgesTraversal) {
+		edgesTraversal.property(propertyKeyFactory.disableEdgeKey(), Double.POSITIVE_INFINITY).iterate();
 	}
 
-	private void enableEdges(GraphTraversal<?, Edge> disabledEdges) {
-		disabledEdges.properties(propertyKeyFactory.disableEdgeKey()).drop().iterate();
+	private void enableEdges() {
+		traversal.E().has(propertyKeyFactory.disableEdgeKey()).properties(propertyKeyFactory.disableEdgeKey()).drop()
+				.iterate();
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
