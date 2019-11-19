@@ -4,6 +4,8 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -52,8 +54,8 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 	}
 
 	@Override
-	public Iterator<Entry<Path, Double>> iterator() {
-		return new Iterator<Entry<Path, Double>>() {
+	public ListIterator<Entry<Path, Double>> iterator() {
+		return new ListIterator<Entry<Path, Double>>() {
 
 			private int k = 0;
 			private boolean finished = false;
@@ -62,7 +64,7 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 
 			@Override
 			public boolean hasNext() {
-				if (finished) {
+				if (finished && k == A.size()) {
 					return false;
 				}
 				if (k + 1 == A.size()) {
@@ -73,16 +75,55 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 
 			@Override
 			public Entry<Path, Double> next() {
-				if (finished) {
+				if (finished && k == A.size()) {
 					throw new NoSuchElementException();
 				}
-				PathInformation pathInformation = k + 1 == A.size() ? A.get(k) : nextPath();
+				PathInformation pathInformation = k + 1 <= A.size() ? A.get(k) : nextPath();
 				if (pathInformation != null) {
 					k++;
-					return new AbstractMap.SimpleImmutableEntry<>(pathInformation.path, pathInformation.cost);
+					return pathInformation.entry;
 				} else {
 					throw new NoSuchElementException();
 				}
+			}
+
+			@Override
+			public boolean hasPrevious() {
+				return k > 0;
+			}
+
+			@Override
+			public Entry<Path, Double> previous() {
+				if (k == 0) {
+					throw new NoSuchElementException();
+				}
+				PathInformation pathInformation = A.get(--k);
+				return pathInformation.entry;
+			}
+
+			@Override
+			public int nextIndex() {
+				return k;
+			}
+
+			@Override
+			public int previousIndex() {
+				return k - 1;
+			}
+
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException("remove");
+			}
+
+			@Override
+			public void set(Entry<Path, Double> e) {
+				throw new UnsupportedOperationException("set");
+			}
+
+			@Override
+			public void add(Entry<Path, Double> e) {
+				throw new UnsupportedOperationException("add");
 			}
 
 			private PathInformation nextPath() {
@@ -325,10 +366,12 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 	private static class PathInformation implements Comparable<PathInformation> {
 		private Path path;
 		private double cost;
+		private Map.Entry<Path, Double> entry;
 
 		private PathInformation(Path path, double cost) {
 			this.path = path;
 			this.cost = cost;
+			this.entry = new AbstractMap.SimpleImmutableEntry<>(path, cost);
 		}
 
 		@Override
