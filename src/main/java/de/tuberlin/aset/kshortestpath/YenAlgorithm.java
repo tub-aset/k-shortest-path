@@ -473,7 +473,7 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 			return this;
 		}
 
-		public YenAlgorithm build() {
+		public YenAlgorithm create() {
 			return new YenAlgorithm(this);
 		}
 
