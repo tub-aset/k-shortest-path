@@ -244,7 +244,7 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 			}
 		} else if (disabledEdges) {
 			traversal = traversal.with(ShortestPath.distance,
-					__.coalesce(__.values(propertyKeyFactory.disableEdgeKey()), __.constant(0)));
+					__.coalesce(__.values(propertyKeyFactory.disableEdgeKey()), __.constant(1)));
 		}
 		if (this.edges != null) {
 			if (this.edges instanceof Traversal) {
