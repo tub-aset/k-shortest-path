@@ -39,6 +39,13 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 	private final Number maxDistance;
 	private final PropertyKeyFactory propertyKeyFactory;
 
+	private int k = 0;
+	private boolean finished = false;
+	private List<PathInformation> A = new ArrayList<>();
+	private PriorityQueue<PathInformation> B = new PriorityQueue<>();
+
+	private Integer maxCandidates = null;
+
 	public YenAlgorithm(Builder builder) {
 		this.traversal = builder.traversal;
 		this.sourceId = builder.sourceId;
@@ -53,34 +60,35 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 				: new DefaultPropertyKeyFactory(UUID.randomUUID().toString());
 	}
 
+	public void setMaxCandidates(Integer maxCandidates) {
+		this.maxCandidates = maxCandidates;
+	}
+
 	@Override
 	public ListIterator<Entry<Path, Double>> iterator() {
 		return new ListIterator<Entry<Path, Double>>() {
 
-			private int k = 0;
-			private boolean finished = false;
-			private List<PathInformation> A = new ArrayList<>();
-			private PriorityQueue<PathInformation> B = new PriorityQueue<>();
+			private int i = 0;
 
 			@Override
 			public boolean hasNext() {
-				if (finished && k == A.size()) {
-					return false;
-				}
-				if (k + 1 == A.size()) {
+				if (i + 1 <= A.size()) {
 					return true;
+				}
+				if (finished && i == A.size()) {
+					return false;
 				}
 				return nextPath() != null;
 			}
 
 			@Override
 			public Entry<Path, Double> next() {
-				if (finished && k == A.size()) {
+				if (finished && i == A.size()) {
 					throw new NoSuchElementException();
 				}
-				PathInformation pathInformation = k + 1 <= A.size() ? A.get(k) : nextPath();
+				PathInformation pathInformation = i + 1 <= A.size() ? A.get(i) : nextPath();
 				if (pathInformation != null) {
-					k++;
+					i++;
 					return pathInformation.entry;
 				} else {
 					throw new NoSuchElementException();
@@ -89,26 +97,26 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 
 			@Override
 			public boolean hasPrevious() {
-				return k > 0;
+				return i > 0;
 			}
 
 			@Override
 			public Entry<Path, Double> previous() {
-				if (k == 0) {
+				if (i == 0) {
 					throw new NoSuchElementException();
 				}
-				PathInformation pathInformation = A.get(--k);
+				PathInformation pathInformation = A.get(--i);
 				return pathInformation.entry;
 			}
 
 			@Override
 			public int nextIndex() {
-				return k;
+				return i;
 			}
 
 			@Override
 			public int previousIndex() {
-				return k - 1;
+				return i - 1;
 			}
 
 			@Override
@@ -126,99 +134,123 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 				throw new UnsupportedOperationException("add");
 			}
 
-			private PathInformation nextPath() {
-				if (k == 0) {
-					Optional<Path> optional = shortestPath(sourceId, false);
-					if (optional.isPresent()) {
-						Path path = optional.get();
-						double cost = pathCost(path);
-						PathInformation pathInformation = new PathInformation(path, cost);
-						A.add(pathInformation);
-						return pathInformation;
-					}
-					finished = true;
-					return null;
-				}
-				PathInformation previousPathInformation = A.get(k - 1);
-				// The spur node ranges from the first node to the next to last node in the
-				// shortest path
-				for (int i = 0; i < previousPathInformation.path.size() - 1; i += (includeEdges ? 2 : 1)) {
-					// Spur node is retrieved from the previous k-shortest path, k - 1
-					Vertex spurNode = previousPathInformation.path.get(i);
-					// The sequence of nodes from the source to the spur node of the previous
-					// k-shortest path
-					Path rootPath = subPath(previousPathInformation.path, i);
-
-					for (PathInformation pathInformation : A) {
-						if (pathInformation.path.size() - (includeEdges ? 2 : 1) > i
-								&& rootPath.equals(subPath(pathInformation.path, i))) {
-
-							// Remove the links that are part of the previous shortest paths which share the
-							// same root path
-
-							GraphTraversal<?, Edge> edgesTraversal;
-							if (includeEdges) {
-								Edge referenceEdge = pathInformation.path.get(i + 1);
-								edgesTraversal = traversal.E(referenceEdge.id());
-							} else {
-								Vertex referenceVertex = pathInformation.path.get(i + 1);
-								edgesTraversal = edgesTraversal(spurNode.id(), referenceVertex.id());
-							}
-							if (edgesTraversal.asAdmin().clone().has(propertyKeyFactory.disableEdgeKey()).hasNext()) {
-								continue; // edge already disabled
-							}
-							disableEdges(edgesTraversal);
-						}
-					}
-
-					// Calculate the spur path from the spur node to the sink
-
-					Optional<Path> spurPathOptional = shortestPath(spurNode.id(), true);
-
-					if (spurPathOptional.isPresent()) {
-						Path spurPath = spurPathOptional.get();
-						// Entire path is made up of the root path and spur path
-						Path totalPath = mergePaths(rootPath, spurPath);
-						double totalPathCost = pathCost(totalPath);
-						// Add the potential k-shortest path to the heap
-						B.add(new PathInformation(totalPath, totalPathCost));
-					}
-
-					// Add back the edges that were removed from the graph
-					enableEdges();
-				}
-				// Sort the potential k-shortest paths by cost
-				// B is already sorted
-				// Add the lowest cost path becomes the k-shortest path.
-				while (true) {
-					PathInformation pathInformation = B.poll();
-					if (pathInformation == null) {
-						finished = true;
-						return null;
-					}
-					if (!A.contains(pathInformation)) {
-						// We found a new path to add
-						A.add(pathInformation);
-						break;
-					}
-				}
-				PathInformation pathInformation = A.get(k);
-				return pathInformation;
-			}
 		};
 	}
 
 	public List<Entry<Path, Double>> list(int numK) {
 		List<Entry<Path, Double>> result = new ArrayList<>();
-		Iterator<Entry<Path, Double>> iterator = this.iterator();
-		for (int i = 0; i < numK; i++) {
-			if (iterator.hasNext()) {
-				result.add(iterator.next());
-			} else {
+
+		for (int k = 0; k < numK; k++) {
+			PathInformation pathInformation = k < A.size() ? A.get(k) : nextPath();
+			result.add(pathInformation.entry);
+			int missing = numK - result.size();
+			if (!foundTooManyCandidates() && missing < B.size()) {
+				Iterator<PathInformation> iterator = B.iterator();
+				for (int i = 0; i < missing; i++) {
+					pathInformation = iterator.next();
+					result.add(pathInformation.entry);
+				}
 				break;
 			}
 		}
 		return result;
+	}
+
+	private PathInformation nextPath() {
+		if (finished) {
+			return null;
+		}
+		if (foundTooManyCandidates()) {
+			finished = true;
+			return null;
+		}
+		if (k == 0) {
+			Optional<Path> optional = shortestPath(sourceId, false);
+			if (optional.isPresent()) {
+				k++;
+				Path path = optional.get();
+				double cost = pathCost(path);
+				PathInformation pathInformation = new PathInformation(path, cost);
+				A.add(pathInformation);
+				return pathInformation;
+			}
+			finished = true;
+			return null;
+		}
+		PathInformation previousPathInformation = A.get(k - 1);
+		// The spur node ranges from the first node to the next to last node in the
+		// shortest path
+		for (int i = 0; i < previousPathInformation.path.size() - 1; i += (includeEdges ? 2 : 1)) {
+			// Spur node is retrieved from the previous k-shortest path, k - 1
+			Vertex spurNode = previousPathInformation.path.get(i);
+			// The sequence of nodes from the source to the spur node of the previous
+			// k-shortest path
+			Path rootPath = subPath(previousPathInformation.path, i);
+
+			for (PathInformation pathInformation : A) {
+				if (pathInformation.path.size() - (includeEdges ? 2 : 1) > i
+						&& rootPath.equals(subPath(pathInformation.path, i))) {
+
+					// Remove the links that are part of the previous shortest paths which share the
+					// same root path
+
+					GraphTraversal<?, Edge> edgesTraversal;
+					if (includeEdges) {
+						Edge referenceEdge = pathInformation.path.get(i + 1);
+						edgesTraversal = traversal.E(referenceEdge.id());
+					} else {
+						Vertex referenceVertex = pathInformation.path.get(i + 1);
+						edgesTraversal = edgesTraversal(spurNode.id(), referenceVertex.id());
+					}
+					if (edgesTraversal.asAdmin().clone().has(propertyKeyFactory.disableEdgeKey()).hasNext()) {
+						continue; // edge already disabled
+					}
+					disableEdges(edgesTraversal);
+				}
+			}
+
+			// Calculate the spur path from the spur node to the sink
+
+			Optional<Path> spurPathOptional = shortestPath(spurNode.id(), true);
+
+			if (spurPathOptional.isPresent()) {
+				Path spurPath = spurPathOptional.get();
+				// Entire path is made up of the root path and spur path
+				Path totalPath = mergePaths(rootPath, spurPath);
+				double totalPathCost = pathCost(totalPath);
+				// Add the potential k-shortest path to the heap
+				B.add(new PathInformation(totalPath, totalPathCost));
+			}
+
+			// Add back the edges that were removed from the graph
+			enableEdges();
+
+			if (foundTooManyCandidates()) {
+				finished = true;
+				return null;
+			}
+		}
+		// Sort the potential k-shortest paths by cost
+		// B is already sorted
+		// Add the lowest cost path becomes the k-shortest path.
+		while (true) {
+			PathInformation pathInformation = B.poll();
+			if (pathInformation == null) {
+				finished = true;
+				return null;
+			}
+			if (!A.contains(pathInformation)) {
+				// We found a new path to add
+				A.add(pathInformation);
+				break;
+			}
+		}
+		PathInformation pathInformation = A.get(k++);
+		return pathInformation;
+	}
+
+	private boolean foundTooManyCandidates() {
+		return maxCandidates != null && B.size() >= maxCandidates;
 	}
 
 	private void disableEdges(GraphTraversal<?, Edge> edgesTraversal) {
