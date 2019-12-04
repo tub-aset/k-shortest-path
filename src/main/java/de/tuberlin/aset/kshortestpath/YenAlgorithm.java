@@ -60,10 +60,6 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 				: new DefaultPropertyKeyFactory(UUID.randomUUID().toString());
 	}
 
-	public void setMaxCandidates(Integer maxCandidates) {
-		this.maxCandidates = maxCandidates;
-	}
-
 	@Override
 	public ListIterator<Entry<Path, Double>> iterator() {
 		return new ListIterator<Entry<Path, Double>>() {
@@ -154,6 +150,18 @@ public class YenAlgorithm implements Iterable<Entry<Path, Double>> {
 			}
 		}
 		return result;
+	}
+
+	public void setMaxCandidates(Integer maxCandidates) {
+		this.maxCandidates = maxCandidates;
+	}
+
+	public Integer getMaxCandidates() {
+		return maxCandidates;
+	}
+
+	public int getCandidateSize() {
+		return B.size();
 	}
 
 	private PathInformation nextPath() {
